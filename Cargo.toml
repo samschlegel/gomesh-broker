@@ -15,7 +15,12 @@ phf = { version = "0.11", features = ["macros"] }
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
 anyhow = "1"
+miette = { version = "7", features = ["fancy"] }
+thiserror = "2"
 log = "0.4"
 env_logger = "0.11"
 clap = { version = "4", features = ["derive"] }
 hex = "0.4"
+dashmap = "6"
+bytes = "1"
+rmqtt = "0.18"

@@ -38,7 +38,18 @@ pub fn authenticate_publisher(username: &str, password: &str) -> AuthOutcome {
                 }
             }
 
-            // TODO: Check expiration (claims.exp) against current time
+            // Check expiration
+            if let Some(exp) = claims.exp {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                if exp < now {
+                    return AuthOutcome::Denied {
+                        reason: "JWT has expired".into(),
+                    };
+                }
+            }
 
             AuthOutcome::Publisher {
                 public_key: pubkey_hex.to_string(),
@@ -47,5 +58,69 @@ pub fn authenticate_publisher(username: &str, password: &str) -> AuthOutcome {
         Err(e) => AuthOutcome::Denied {
             reason: format!("JWT verification failed: {}", e),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use base64::Engine;
+    use ed25519_dalek::{SigningKey, Signer};
+
+    fn make_jwt(signing_key: &SigningKey, claims_json: &str) -> String {
+        let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"EdDSA","typ":"JWT"}"#);
+        let payload = URL_SAFE_NO_PAD.encode(claims_json);
+        let message = format!("{}.{}", header, payload);
+        let signature = signing_key.sign(message.as_bytes());
+        let sig_b64 = URL_SAFE_NO_PAD.encode(signature.to_bytes());
+        format!("{}.{}.{}", header, payload, sig_b64)
+    }
+
+    #[test]
+    fn valid_publisher_auth() {
+        let signing_key = SigningKey::from_bytes(&[1u8; 32]);
+        let pk_hex = hex::encode(signing_key.verifying_key().as_bytes());
+        let username = format!("v1_{pk_hex}");
+
+        let claims = serde_json::json!({
+            "sub": pk_hex,
+            "exp": 9999999999u64,
+            "iat": 1000000000u64
+        });
+        let token = make_jwt(&signing_key, &claims.to_string());
+
+        let result = authenticate_publisher(&username, &token);
+        match result {
+            AuthOutcome::Publisher { public_key } => {
+                assert_eq!(public_key, pk_hex);
+            }
+            other => panic!("expected AuthOutcome::Publisher, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn expired_token_rejected() {
+        let signing_key = SigningKey::from_bytes(&[1u8; 32]);
+        let pk_hex = hex::encode(signing_key.verifying_key().as_bytes());
+        let username = format!("v1_{pk_hex}");
+
+        let claims = serde_json::json!({
+            "sub": pk_hex,
+            "exp": 1u64,  // expired long ago
+            "iat": 0u64
+        });
+        let token = make_jwt(&signing_key, &claims.to_string());
+
+        let result = authenticate_publisher(&username, &token);
+        match result {
+            AuthOutcome::Denied { reason } => {
+                assert!(
+                    reason.contains("expired"),
+                    "denial reason should mention expiration, got: {reason}"
+                );
+            }
+            other => panic!("expected Denied for expired token, got {:?}", other),
+        }
     }
 }

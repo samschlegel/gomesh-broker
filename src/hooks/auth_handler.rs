@@ -106,7 +106,6 @@ impl Handler for AuthHandler {
                             outcome = "deny",
                             reason = %reason,
                         );
-                        tracing::warn!("Auth denied for {}: {}", client_id, reason);
                         (
                             false,
                             Some(HookResult::AuthResult(AuthResult::BadUsernameOrPassword)),

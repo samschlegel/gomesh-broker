@@ -71,11 +71,6 @@ impl Handler for SubscribeAclHandler {
                                     "deny",
                                     Some(&reason),
                                 );
-                                tracing::warn!(
-                                    "Subscribe denied for client {}: {}",
-                                    client_id,
-                                    reason
-                                );
                                 SubscribeReturn::new_failure(SubscribeAckReason::NotAuthorized)
                             }
                         }
@@ -89,7 +84,7 @@ impl Handler for SubscribeAclHandler {
                             outcome = "deny",
                             reason = "no identity found",
                         );
-                        tracing::warn!(
+                        tracing::error!(
                             "Subscribe denied: no identity found for client {}",
                             client_id
                         );

@@ -64,11 +64,6 @@ impl Handler for PublishAclHandler {
                                     "deny",
                                     Some(&reason),
                                 );
-                                tracing::warn!(
-                                    "Publish denied for client {}: {}",
-                                    client_id,
-                                    reason
-                                );
                                 PublishAclResult::rejected(false, Some(reason.into()))
                             }
                         }
@@ -82,7 +77,7 @@ impl Handler for PublishAclHandler {
                             outcome = "deny",
                             reason = "no identity found",
                         );
-                        tracing::warn!(
+                        tracing::error!(
                             "Publish denied: no identity found for client {}",
                             client_id
                         );

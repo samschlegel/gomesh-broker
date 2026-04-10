@@ -13,7 +13,7 @@ tls_key = "key.pem"
 
 # Static subscriber accounts
 # Each subscriber has an Argon2id password hash and a role ("full" or "limited").
-# Generate a hash with: echo -n 'password' | argon2 salt -id -e
+# Generate a hash with: echo -n 'password' | argon2 "$(head -c16 /dev/random)" -id -e
 #
 # [subscribers.example_user]
 # password_hash = "$argon2id$v=19$m=65536,t=3,p=4$..."

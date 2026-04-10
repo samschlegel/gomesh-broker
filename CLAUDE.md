@@ -13,6 +13,12 @@ cargo test           # Run all tests
 cargo clippy         # Lint
 ```
 
+### Self-signed TLS certificate
+
+```bash
+cargo run -- generate-cert   # Generates cert.pem + key.pem and exits
+```
+
 ## Architecture
 
 ```

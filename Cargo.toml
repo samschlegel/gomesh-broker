@@ -4,23 +4,28 @@ version = "0.1.0"
 edition = "2024"
 description = "MeshCore MQTT broker with Ed25519 JWT authentication and topic-level authorization"
 
+[features]
+default = ["generate-cert"]
+generate-cert = ["dep:rcgen"]
+
 [dependencies]
-ed25519-dalek = { version = "2", features = ["std"] }
+anyhow = "1"
+argon2 = "0.5"
+async-trait = "0.1"
 base64 = "0.22"
+bytes = "1"
+clap = { version = "4", features = ["derive"] }
+dashmap = "6"
+ed25519-dalek = { version = "2", features = ["std"] }
+env_logger = "0.11"
+hex = "0.4"
+log = "0.4"
+miette = { version = "7", features = ["fancy"] }
+phf = { version = "0.11", features = ["macros"] }
+rcgen = { version = "0.13", optional = true }
+rmqtt = { version = "0.18", features = ["ws", "tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-toml = "0.8"
-argon2 = "0.5"
-phf = { version = "0.11", features = ["macros"] }
-tokio = { version = "1", features = ["full"] }
-async-trait = "0.1"
-anyhow = "1"
-miette = { version = "7", features = ["fancy"] }
 thiserror = "2"
-log = "0.4"
-env_logger = "0.11"
-clap = { version = "4", features = ["derive"] }
-hex = "0.4"
-dashmap = "6"
-bytes = "1"
-rmqtt = "0.18"
+tokio = { version = "1", features = ["full"] }
+toml = "0.8"

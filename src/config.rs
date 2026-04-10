@@ -6,8 +6,12 @@ use thiserror::Error;
 /// Top-level broker configuration, loaded from TOML.
 #[derive(Debug, Deserialize)]
 pub struct BrokerConfig {
-    /// MQTT listener address (e.g. "0.0.0.0:1883").
+    /// MQTT listener address (e.g. "0.0.0.0:8083").
     pub listen: String,
+    /// Path to TLS certificate file (PEM).
+    pub tls_cert: String,
+    /// Path to TLS private key file (PEM).
+    pub tls_key: String,
     /// Static subscriber accounts keyed by username.
     pub subscribers: HashMap<String, SubscriberAccount>,
     /// Allowed IATA region codes. If empty, all codes are accepted.

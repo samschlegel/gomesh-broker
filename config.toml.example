@@ -1,7 +1,12 @@
 # gomesh-broker configuration
 
-# MQTT listener address
-listen = "0.0.0.0:1883"
+# MQTT-over-WSS listener address
+listen = "0.0.0.0:8083"
+
+# TLS certificate and private key (PEM format)
+# Generate a self-signed pair with: cargo run -- generate-cert
+tls_cert = "cert.pem"
+tls_key = "key.pem"
 
 # Allowed IATA region codes (empty = allow all)
 # allowed_regions = ["SFO", "LAX", "JFK"]

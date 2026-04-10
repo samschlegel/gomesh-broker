@@ -1,6 +1,12 @@
 build:
     cargo build
 
+test:
+    cargo fmt
+    cargo check
+    cargo clippy
+    cargo test
+
 build-release:
     cargo build --release
 

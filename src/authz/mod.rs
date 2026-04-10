@@ -34,7 +34,12 @@ impl MeshcoreAuthorizer {
 }
 
 impl Authorizer for MeshcoreAuthorizer {
-    fn check(&self, identity: &ClientIdentity, action: TopicAction, raw_topic: &str) -> AclDecision {
+    fn check(
+        &self,
+        identity: &ClientIdentity,
+        action: TopicAction,
+        raw_topic: &str,
+    ) -> AclDecision {
         // Admins bypass topic parsing and IATA validation (e.g. wildcard subscriptions)
         if matches!(
             identity,

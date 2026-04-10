@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
+use miette::Context;
 #[cfg(feature = "generate-cert")]
 use miette::IntoDiagnostic;
-use miette::Context;
 
 /// Convert an anyhow::Result into a miette::Result.
 /// Needed because anyhow::Error doesn't implement std::error::Error.
@@ -51,7 +51,8 @@ fn generate_self_signed_cert() -> miette::Result<()> {
 
 async fn run(config_path: &str) -> miette::Result<()> {
     let config = gomesh_broker::config::BrokerConfig::load(config_path)?;
-    log::info!("Loaded configuration from {}", config_path);
+    gomesh_broker::logging::init(config.access_log.as_ref());
+    tracing::info!("Loaded configuration from {}", config_path);
 
     let listen_addr: std::net::SocketAddr = config
         .listen
@@ -68,9 +69,9 @@ async fn run(config_path: &str) -> miette::Result<()> {
     let register = scx.extends.hook_mgr.register();
     plugin.register(register.as_ref()).await;
     register.start().await;
-    log::info!("Registered MeshCore hook handlers");
+    tracing::info!("Registered MeshCore hook handlers");
 
-    log::info!("Starting MQTT-over-WSS broker on {}", listen_addr);
+    tracing::info!("Starting MQTT-over-WSS broker on {}", listen_addr);
 
     let listener = from_anyhow(
         rmqtt::net::Builder::new()
@@ -97,12 +98,14 @@ async fn run(config_path: &str) -> miette::Result<()> {
 #[tokio::main]
 async fn main() -> miette::Result<()> {
     miette::set_panic_hook();
-    env_logger::init();
     let args = Args::parse();
 
     match args.command {
         None | Some(Command::Run) => run(&args.config).await,
         #[cfg(feature = "generate-cert")]
-        Some(Command::GenerateCert) => generate_self_signed_cert(),
+        Some(Command::GenerateCert) => {
+            gomesh_broker::logging::init(None);
+            generate_self_signed_cert()
+        }
     }
 }

@@ -1,12 +1,5 @@
 /// Fields that are stripped from payloads delivered to limited-role subscribers.
-const STRIPPED_FIELDS: &[&str] = &[
-    "SNR",
-    "RSSI",
-    "score",
-    "stats",
-    "model",
-    "firmware_version",
-];
+const STRIPPED_FIELDS: &[&str] = &["SNR", "RSSI", "score", "stats", "model", "firmware_version"];
 
 /// Filter a message payload for limited-role subscribers.
 ///

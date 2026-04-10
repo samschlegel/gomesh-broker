@@ -45,19 +45,42 @@ impl Handler for PublishAclHandler {
 
                 let result = match self.identity_store.get(&client_id) {
                     Some(identity) => {
-                        let decision = self.authorizer.check(&identity, TopicAction::Publish, &topic);
+                        let decision =
+                            self.authorizer
+                                .check(&identity, TopicAction::Publish, &topic);
                         match decision {
                             AclDecision::Allow | AclDecision::AllowStripRetain => {
+                                super::log_access_event(
+                                    "publish", &client_id, &identity, &topic, "allow", None,
+                                );
                                 PublishAclResult::allow()
                             }
                             AclDecision::Deny { reason } => {
-                                log::warn!("Publish denied for client {}: {}", client_id, reason);
+                                super::log_access_event(
+                                    "publish",
+                                    &client_id,
+                                    &identity,
+                                    &topic,
+                                    "deny",
+                                    Some(&reason),
+                                );
                                 PublishAclResult::rejected(false, Some(reason.into()))
                             }
                         }
                     }
                     None => {
-                        log::warn!("Publish denied: no identity found for client {}", client_id);
+                        tracing::info!(target: "access",
+                            event = "publish",
+                            client_id = %client_id,
+                            identity_type = "unknown",
+                            topic = %topic,
+                            outcome = "deny",
+                            reason = "no identity found",
+                        );
+                        tracing::error!(
+                            "Publish denied: no identity found for client {}",
+                            client_id
+                        );
                         PublishAclResult::rejected(true, Some("Unknown client identity".into()))
                     }
                 };

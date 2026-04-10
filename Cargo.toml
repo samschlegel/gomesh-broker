@@ -17,9 +17,10 @@ bytes = "1"
 clap = { version = "4", features = ["derive"] }
 dashmap = "6"
 ed25519-dalek = { version = "2", features = ["std"] }
-env_logger = "0.11"
+file-rotate = "0.7"
 hex = "0.4"
-log = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 miette = { version = "7", features = ["fancy"] }
 phf = { version = "0.11", features = ["macros"] }
 rcgen = { version = "0.13", optional = true }

@@ -47,27 +47,44 @@ impl Handler for SubscribeAclHandler {
 
                 let result = match self.identity_store.get(&client_id) {
                     Some(identity) => {
-                        let decision = self.authorizer.check(
-                            &identity,
-                            TopicAction::Subscribe,
-                            &topic,
-                        );
+                        let decision =
+                            self.authorizer
+                                .check(&identity, TopicAction::Subscribe, &topic);
                         match decision {
                             AclDecision::Allow | AclDecision::AllowStripRetain => {
+                                super::log_access_event(
+                                    "subscribe",
+                                    &client_id,
+                                    &identity,
+                                    &topic,
+                                    "allow",
+                                    None,
+                                );
                                 SubscribeReturn::new_success(subscribe.opts.qos(), None)
                             }
                             AclDecision::Deny { reason } => {
-                                log::warn!(
-                                    "Subscribe denied for client {}: {}",
-                                    client_id,
-                                    reason
+                                super::log_access_event(
+                                    "subscribe",
+                                    &client_id,
+                                    &identity,
+                                    &topic,
+                                    "deny",
+                                    Some(&reason),
                                 );
                                 SubscribeReturn::new_failure(SubscribeAckReason::NotAuthorized)
                             }
                         }
                     }
                     None => {
-                        log::warn!(
+                        tracing::info!(target: "access",
+                            event = "subscribe",
+                            client_id = %client_id,
+                            identity_type = "unknown",
+                            topic = %topic,
+                            outcome = "deny",
+                            reason = "no identity found",
+                        );
+                        tracing::error!(
                             "Subscribe denied: no identity found for client {}",
                             client_id
                         );

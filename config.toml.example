@@ -11,6 +11,13 @@ tls_key = "key.pem"
 # Allowed IATA region codes (empty = allow all)
 # allowed_regions = ["SFO", "LAX", "JFK"]
 
+# Access logging (optional — omit section to disable)
+# Logs auth, publish, and subscribe events to a rotating JSON file.
+# [access_log]
+# path = "access.log"
+# max_size = 10485760   # 10 MiB per file
+# max_files = 5         # number of rotated files to keep
+
 # Static subscriber accounts
 # Each subscriber has an Argon2id password hash and a role ("full" or "limited").
 # Generate a hash with: echo -n 'password' | argon2 "$(head -c16 /dev/random)" -id -e

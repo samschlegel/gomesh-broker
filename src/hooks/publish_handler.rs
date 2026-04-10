@@ -18,7 +18,7 @@ use rmqtt::types::PublishAclResult;
 
 use crate::authz::{AclDecision, Authorizer, MeshcoreAuthorizer};
 use crate::hooks::auth_handler::IdentityStore;
-use crate::types::{ClientIdentity, TopicAction};
+use crate::types::{ClientIdentity, SubscriberRole, TopicAction};
 
 /// Handles publish ACL checks via `MessagePublishCheckAcl`.
 pub struct PublishAclHandler {
@@ -48,16 +48,26 @@ impl Handler for PublishAclHandler {
                         let decision = self.authorizer.check(&identity, TopicAction::Publish, &topic);
                         match decision {
                             AclDecision::Allow | AclDecision::AllowStripRetain => {
+                                log_access_publish(&client_id, &identity, &topic, "allow", None);
                                 PublishAclResult::allow()
                             }
                             AclDecision::Deny { reason } => {
-                                log::warn!("Publish denied for client {}: {}", client_id, reason);
+                                log_access_publish(&client_id, &identity, &topic, "deny", Some(&reason));
+                                tracing::warn!("Publish denied for client {}: {}", client_id, reason);
                                 PublishAclResult::rejected(false, Some(reason.into()))
                             }
                         }
                     }
                     None => {
-                        log::warn!("Publish denied: no identity found for client {}", client_id);
+                        tracing::info!(target: "access",
+                            event = "publish",
+                            client_id = %client_id,
+                            identity_type = "unknown",
+                            topic = %topic,
+                            outcome = "deny",
+                            reason = "no identity found",
+                        );
+                        tracing::warn!("Publish denied: no identity found for client {}", client_id);
                         PublishAclResult::rejected(true, Some("Unknown client identity".into()))
                     }
                 };
@@ -66,6 +76,48 @@ impl Handler for PublishAclHandler {
             }
             _ => (true, acc),
         }
+    }
+}
+
+fn log_access_publish(
+    client_id: &str,
+    identity: &ClientIdentity,
+    topic: &str,
+    outcome: &str,
+    reason: Option<&str>,
+) {
+    match identity {
+        ClientIdentity::Publisher { public_key } => {
+            tracing::info!(target: "access",
+                event = "publish",
+                client_id = %client_id,
+                identity_type = "publisher",
+                public_key = %public_key,
+                topic = %topic,
+                outcome = %outcome,
+                reason = reason.unwrap_or(""),
+            );
+        }
+        ClientIdentity::Subscriber { username, role } => {
+            tracing::info!(target: "access",
+                event = "publish",
+                client_id = %client_id,
+                identity_type = "subscriber",
+                username = %username,
+                role = %format_role(*role),
+                topic = %topic,
+                outcome = %outcome,
+                reason = reason.unwrap_or(""),
+            );
+        }
+    }
+}
+
+fn format_role(role: SubscriberRole) -> &'static str {
+    match role {
+        SubscriberRole::Full => "full",
+        SubscriberRole::Limited => "limited",
+        SubscriberRole::Admin => "admin",
     }
 }
 

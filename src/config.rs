@@ -17,6 +17,34 @@ pub struct BrokerConfig {
     /// Allowed IATA region codes. If empty, all codes are accepted.
     #[serde(default)]
     pub allowed_regions: Vec<String>,
+    /// Access log configuration. If absent, access logging is disabled.
+    pub access_log: Option<AccessLogConfig>,
+}
+
+/// Configuration for the access log file with size-based rotation.
+#[derive(Debug, Deserialize)]
+pub struct AccessLogConfig {
+    /// Path to the access log file.
+    #[serde(default = "AccessLogConfig::default_path")]
+    pub path: String,
+    /// Maximum size of a single log file in bytes before rotation.
+    #[serde(default = "AccessLogConfig::default_max_size")]
+    pub max_size: usize,
+    /// Maximum number of rotated log files to keep.
+    #[serde(default = "AccessLogConfig::default_max_files")]
+    pub max_files: usize,
+}
+
+impl AccessLogConfig {
+    fn default_path() -> String {
+        "access.log".into()
+    }
+    fn default_max_size() -> usize {
+        10 * 1024 * 1024 // 10 MiB
+    }
+    fn default_max_files() -> usize {
+        5
+    }
 }
 
 /// A static subscriber account entry.

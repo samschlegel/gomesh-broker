@@ -62,6 +62,13 @@ impl Handler for AuthHandler {
 
                 match outcome {
                     AuthOutcome::Publisher { public_key } => {
+                        tracing::info!(target: "access",
+                            event = "auth",
+                            client_id = %client_id,
+                            identity_type = "publisher",
+                            public_key = %public_key,
+                            outcome = "allow",
+                        );
                         self.identity_store.insert(
                             client_id,
                             ClientIdentity::Publisher { public_key },
@@ -69,6 +76,14 @@ impl Handler for AuthHandler {
                         (false, Some(HookResult::AuthResult(AuthResult::Allow(false, None))))
                     }
                     AuthOutcome::Subscriber { username, role } => {
+                        tracing::info!(target: "access",
+                            event = "auth",
+                            client_id = %client_id,
+                            identity_type = "subscriber",
+                            username = %username,
+                            role = ?role,
+                            outcome = "allow",
+                        );
                         self.identity_store.insert(
                             client_id,
                             ClientIdentity::Subscriber { username, role },
@@ -76,7 +91,14 @@ impl Handler for AuthHandler {
                         (false, Some(HookResult::AuthResult(AuthResult::Allow(false, None))))
                     }
                     AuthOutcome::Denied { reason } => {
-                        log::warn!("Auth denied for {}: {}", client_id, reason);
+                        tracing::info!(target: "access",
+                            event = "auth",
+                            client_id = %client_id,
+                            identity_type = "unknown",
+                            outcome = "deny",
+                            reason = %reason,
+                        );
+                        tracing::warn!("Auth denied for {}: {}", client_id, reason);
                         (false, Some(HookResult::AuthResult(AuthResult::BadUsernameOrPassword)))
                     }
                 }

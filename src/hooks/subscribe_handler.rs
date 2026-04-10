@@ -21,7 +21,7 @@ use rmqtt::{
 
 use crate::authz::{AclDecision, Authorizer, MeshcoreAuthorizer};
 use crate::hooks::auth_handler::IdentityStore;
-use crate::types::TopicAction;
+use crate::types::{ClientIdentity, SubscriberRole, TopicAction};
 
 pub struct SubscribeAclHandler {
     authorizer: Arc<MeshcoreAuthorizer>,
@@ -54,10 +54,12 @@ impl Handler for SubscribeAclHandler {
                         );
                         match decision {
                             AclDecision::Allow | AclDecision::AllowStripRetain => {
+                                log_access_subscribe(&client_id, &identity, &topic, "allow", None);
                                 SubscribeReturn::new_success(subscribe.opts.qos(), None)
                             }
                             AclDecision::Deny { reason } => {
-                                log::warn!(
+                                log_access_subscribe(&client_id, &identity, &topic, "deny", Some(&reason));
+                                tracing::warn!(
                                     "Subscribe denied for client {}: {}",
                                     client_id,
                                     reason
@@ -67,7 +69,15 @@ impl Handler for SubscribeAclHandler {
                         }
                     }
                     None => {
-                        log::warn!(
+                        tracing::info!(target: "access",
+                            event = "subscribe",
+                            client_id = %client_id,
+                            identity_type = "unknown",
+                            topic = %topic,
+                            outcome = "deny",
+                            reason = "no identity found",
+                        );
+                        tracing::warn!(
                             "Subscribe denied: no identity found for client {}",
                             client_id
                         );
@@ -79,5 +89,47 @@ impl Handler for SubscribeAclHandler {
             }
             _ => (false, acc),
         }
+    }
+}
+
+fn log_access_subscribe(
+    client_id: &str,
+    identity: &ClientIdentity,
+    topic: &str,
+    outcome: &str,
+    reason: Option<&str>,
+) {
+    match identity {
+        ClientIdentity::Publisher { public_key } => {
+            tracing::info!(target: "access",
+                event = "subscribe",
+                client_id = %client_id,
+                identity_type = "publisher",
+                public_key = %public_key,
+                topic = %topic,
+                outcome = %outcome,
+                reason = reason.unwrap_or(""),
+            );
+        }
+        ClientIdentity::Subscriber { username, role } => {
+            tracing::info!(target: "access",
+                event = "subscribe",
+                client_id = %client_id,
+                identity_type = "subscriber",
+                username = %username,
+                role = %format_role(*role),
+                topic = %topic,
+                outcome = %outcome,
+                reason = reason.unwrap_or(""),
+            );
+        }
+    }
+}
+
+fn format_role(role: SubscriberRole) -> &'static str {
+    match role {
+        SubscriberRole::Full => "full",
+        SubscriberRole::Limited => "limited",
+        SubscriberRole::Admin => "admin",
     }
 }

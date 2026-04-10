@@ -3,4 +3,5 @@ pub mod authz;
 pub mod config;
 pub mod filter;
 pub mod hooks;
+pub mod logging;
 pub mod types;

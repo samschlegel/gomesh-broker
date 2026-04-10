@@ -20,6 +20,8 @@ pub enum SubscriberRole {
     Full,
     /// Limited access — certain payload fields are stripped.
     Limited,
+    /// Admin — can subscribe and publish to any topic, no payload filtering.
+    Admin,
 }
 
 /// Parsed components of a MeshCore MQTT topic.

@@ -41,6 +41,7 @@ pub fn authenticate_subscriber(
     }
 
     let role = match account.role.as_str() {
+        "admin" => SubscriberRole::Admin,
         "full" => SubscriberRole::Full,
         "limited" => SubscriberRole::Limited,
         other => {

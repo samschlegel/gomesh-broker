@@ -4,6 +4,8 @@ use super::AclDecision;
 /// Core ACL decision engine.
 ///
 /// Rules:
+/// - **Admin subscribers** can subscribe and publish to any topic.
+///   (Also short-circuited in `MeshcoreAuthorizer::check` to bypass topic parsing.)
 /// - **Publishers** can only publish to topics matching their own public key.
 /// - **Subscribers with Full role** can subscribe to any valid topic.
 /// - **Subscribers with Limited role** can subscribe to any valid topic,
@@ -15,6 +17,15 @@ pub fn check_acl(
     topic: &TopicParts,
 ) -> AclDecision {
     match (identity, action) {
+        // Admin subscribers can subscribe and publish to any topic
+        (
+            ClientIdentity::Subscriber {
+                role: SubscriberRole::Admin,
+                ..
+            },
+            _,
+        ) => AclDecision::Allow,
+
         // Publishers can only publish to their own pubkey topics
         (ClientIdentity::Publisher { public_key }, TopicAction::Publish) => {
             if topic.pubkey == *public_key {
@@ -112,5 +123,29 @@ mod tests {
         };
         let result = check_acl(&id, TopicAction::Publish, &topic("aabb"));
         assert!(matches!(result, AclDecision::Deny { .. }));
+    }
+
+    #[test]
+    fn admin_can_subscribe() {
+        let id = ClientIdentity::Subscriber {
+            username: "admin".into(),
+            role: SubscriberRole::Admin,
+        };
+        assert_eq!(
+            check_acl(&id, TopicAction::Subscribe, &topic("aabb")),
+            AclDecision::Allow
+        );
+    }
+
+    #[test]
+    fn admin_can_publish() {
+        let id = ClientIdentity::Subscriber {
+            username: "admin".into(),
+            role: SubscriberRole::Admin,
+        };
+        assert_eq!(
+            check_acl(&id, TopicAction::Publish, &topic("aabb")),
+            AclDecision::Allow
+        );
     }
 }

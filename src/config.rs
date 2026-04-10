@@ -1,5 +1,7 @@
+use miette::Diagnostic;
 use serde::Deserialize;
 use std::collections::HashMap;
+use thiserror::Error;
 
 /// Top-level broker configuration, loaded from TOML.
 #[derive(Debug, Deserialize)]
@@ -22,11 +24,48 @@ pub struct SubscriberAccount {
     pub role: String,
 }
 
+#[derive(Debug, Error, Diagnostic)]
+pub enum ConfigError {
+    #[error("Configuration file not found: {path}")]
+    #[diagnostic(help("Create a config file at this path, or use --config to specify a different location.\nSee config.toml.example for the expected format."))]
+    NotFound { path: String },
+
+    #[error("Cannot read configuration file: {path}")]
+    #[diagnostic(help("Check file permissions and ensure the path is correct."))]
+    ReadError {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("Invalid TOML in configuration file: {path}")]
+    #[diagnostic(help("Fix the TOML syntax error shown above, then try again."))]
+    ParseError {
+        path: String,
+        #[source]
+        source: toml::de::Error,
+    },
+}
+
 impl BrokerConfig {
     /// Load configuration from a TOML file.
-    pub fn load(path: &str) -> anyhow::Result<Self> {
-        let contents = std::fs::read_to_string(path)?;
-        let config: BrokerConfig = toml::from_str(&contents)?;
+    pub fn load(path: &str) -> Result<Self, ConfigError> {
+        let contents = std::fs::read_to_string(path).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                ConfigError::NotFound {
+                    path: path.to_string(),
+                }
+            } else {
+                ConfigError::ReadError {
+                    path: path.to_string(),
+                    source: e,
+                }
+            }
+        })?;
+        let config: BrokerConfig = toml::from_str(&contents).map_err(|e| ConfigError::ParseError {
+            path: path.to_string(),
+            source: e,
+        })?;
         Ok(config)
     }
 }

@@ -1,0 +1,15 @@
+# gomesh-broker configuration
+
+# MQTT listener address
+listen = "0.0.0.0:1883"
+
+# Allowed IATA region codes (empty = allow all)
+# allowed_regions = ["SFO", "LAX", "JFK"]
+
+# Static subscriber accounts
+# Each subscriber has an Argon2id password hash and a role ("full" or "limited").
+# Generate a hash with: echo -n 'password' | argon2 salt -id -e
+#
+# [subscribers.example_user]
+# password_hash = "$argon2id$v=19$m=65536,t=3,p=4$..."
+# role = "full"

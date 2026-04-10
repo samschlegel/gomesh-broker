@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
+use miette::Context;
 #[cfg(feature = "generate-cert")]
 use miette::IntoDiagnostic;
-use miette::Context;
 
 /// Convert an anyhow::Result into a miette::Result.
 /// Needed because anyhow::Error doesn't implement std::error::Error.

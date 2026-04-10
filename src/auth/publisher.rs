@@ -64,9 +64,9 @@ pub fn authenticate_publisher(username: &str, password: &str) -> AuthOutcome {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use base64::Engine;
-    use ed25519_dalek::{SigningKey, Signer};
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use ed25519_dalek::{Signer, SigningKey};
 
     fn make_jwt(signing_key: &SigningKey, claims_json: &str) -> String {
         let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"EdDSA","typ":"JWT"}"#);

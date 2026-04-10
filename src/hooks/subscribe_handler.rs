@@ -21,7 +21,7 @@ use rmqtt::{
 
 use crate::authz::{AclDecision, Authorizer, MeshcoreAuthorizer};
 use crate::hooks::auth_handler::IdentityStore;
-use crate::types::{ClientIdentity, SubscriberRole, TopicAction};
+use crate::types::TopicAction;
 
 pub struct SubscribeAclHandler {
     authorizer: Arc<MeshcoreAuthorizer>,
@@ -47,18 +47,30 @@ impl Handler for SubscribeAclHandler {
 
                 let result = match self.identity_store.get(&client_id) {
                     Some(identity) => {
-                        let decision = self.authorizer.check(
-                            &identity,
-                            TopicAction::Subscribe,
-                            &topic,
-                        );
+                        let decision =
+                            self.authorizer
+                                .check(&identity, TopicAction::Subscribe, &topic);
                         match decision {
                             AclDecision::Allow | AclDecision::AllowStripRetain => {
-                                log_access_subscribe(&client_id, &identity, &topic, "allow", None);
+                                super::log_access_event(
+                                    "subscribe",
+                                    &client_id,
+                                    &identity,
+                                    &topic,
+                                    "allow",
+                                    None,
+                                );
                                 SubscribeReturn::new_success(subscribe.opts.qos(), None)
                             }
                             AclDecision::Deny { reason } => {
-                                log_access_subscribe(&client_id, &identity, &topic, "deny", Some(&reason));
+                                super::log_access_event(
+                                    "subscribe",
+                                    &client_id,
+                                    &identity,
+                                    &topic,
+                                    "deny",
+                                    Some(&reason),
+                                );
                                 tracing::warn!(
                                     "Subscribe denied for client {}: {}",
                                     client_id,
@@ -89,47 +101,5 @@ impl Handler for SubscribeAclHandler {
             }
             _ => (false, acc),
         }
-    }
-}
-
-fn log_access_subscribe(
-    client_id: &str,
-    identity: &ClientIdentity,
-    topic: &str,
-    outcome: &str,
-    reason: Option<&str>,
-) {
-    match identity {
-        ClientIdentity::Publisher { public_key } => {
-            tracing::info!(target: "access",
-                event = "subscribe",
-                client_id = %client_id,
-                identity_type = "publisher",
-                public_key = %public_key,
-                topic = %topic,
-                outcome = %outcome,
-                reason = reason.unwrap_or(""),
-            );
-        }
-        ClientIdentity::Subscriber { username, role } => {
-            tracing::info!(target: "access",
-                event = "subscribe",
-                client_id = %client_id,
-                identity_type = "subscriber",
-                username = %username,
-                role = %format_role(*role),
-                topic = %topic,
-                outcome = %outcome,
-                reason = reason.unwrap_or(""),
-            );
-        }
-    }
-}
-
-fn format_role(role: SubscriberRole) -> &'static str {
-    match role {
-        SubscriberRole::Full => "full",
-        SubscriberRole::Limited => "limited",
-        SubscriberRole::Admin => "admin",
     }
 }

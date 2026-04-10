@@ -24,6 +24,16 @@ pub enum SubscriberRole {
     Admin,
 }
 
+impl std::fmt::Display for SubscriberRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Full => f.write_str("full"),
+            Self::Limited => f.write_str("limited"),
+            Self::Admin => f.write_str("admin"),
+        }
+    }
+}
+
 /// Parsed components of a MeshCore MQTT topic.
 ///
 /// Topics follow the pattern: `{region}/{iata}/{pubkey}/{subtopic...}`

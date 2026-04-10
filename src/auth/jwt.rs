@@ -1,5 +1,5 @@
-use anyhow::{anyhow, Result};
-use ed25519_dalek::{Signature, VerifyingKey, Verifier};
+use anyhow::{Result, anyhow};
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 
 /// Decoded JWT claims (only the fields we need).
 #[derive(Debug, serde::Deserialize)]
@@ -99,9 +99,9 @@ pub fn decode_and_verify(token: &str, public_key_hex: &str) -> Result<JwtClaims>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use base64::Engine;
-    use ed25519_dalek::{SigningKey, Signer};
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use ed25519_dalek::{Signer, SigningKey};
 
     fn make_jwt(signing_key: &SigningKey, claims_json: &str) -> String {
         let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"EdDSA","typ":"JWT"}"#);
@@ -144,7 +144,11 @@ mod tests {
         });
         let token = make_jwt(&sk, &claims.to_string());
         let result = decode_and_verify(&token, &other_pk_hex);
-        assert!(result.is_err(), "expected Err for wrong key, got {:?}", result);
+        assert!(
+            result.is_err(),
+            "expected Err for wrong key, got {:?}",
+            result
+        );
     }
 
     #[test]
@@ -176,7 +180,11 @@ mod tests {
         let tampered_token = format!("{}.{}.{}", parts[0], tampered_payload, parts[2]);
 
         let result = decode_and_verify(&tampered_token, &pk_hex);
-        assert!(result.is_err(), "expected Err for tampered payload, got {:?}", result);
+        assert!(
+            result.is_err(),
+            "expected Err for tampered payload, got {:?}",
+            result
+        );
     }
 
     #[test]
@@ -215,7 +223,11 @@ mod tests {
         });
         let token = make_meshcore_jwt(&sk, &claims.to_string());
         let result = decode_and_verify(&token, &pk_hex);
-        assert!(result.is_ok(), "expected Ok for MeshCore JWT, got {:?}", result);
+        assert!(
+            result.is_ok(),
+            "expected Ok for MeshCore JWT, got {:?}",
+            result
+        );
     }
 
     #[test]
@@ -245,6 +257,10 @@ mod tests {
         });
         let token = make_meshcore_jwt(&sk, &claims.to_string());
         let result = decode_and_verify(&token, &other_pk_hex);
-        assert!(result.is_err(), "expected Err for wrong key, got {:?}", result);
+        assert!(
+            result.is_err(),
+            "expected Err for wrong key, got {:?}",
+            result
+        );
     }
 }

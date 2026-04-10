@@ -1,7 +1,7 @@
 pub mod auth_handler;
+pub mod delivery_handler;
 pub mod publish_handler;
 pub mod subscribe_handler;
-pub mod delivery_handler;
 
 use std::sync::Arc;
 
@@ -10,11 +10,48 @@ use rmqtt::hook::{Register, Type};
 use crate::auth::MeshcoreAuthenticator;
 use crate::authz::MeshcoreAuthorizer;
 use crate::config::BrokerConfig;
+use crate::types::ClientIdentity;
+
+/// Log a structured access event for publish/subscribe ACL decisions.
+pub(crate) fn log_access_event(
+    event: &str,
+    client_id: &str,
+    identity: &ClientIdentity,
+    topic: &str,
+    outcome: &str,
+    reason: Option<&str>,
+) {
+    match identity {
+        ClientIdentity::Publisher { public_key } => {
+            tracing::info!(target: "access",
+                event = %event,
+                client_id = %client_id,
+                identity_type = "publisher",
+                public_key = %public_key,
+                topic = %topic,
+                outcome = %outcome,
+                reason = reason.unwrap_or(""),
+            );
+        }
+        ClientIdentity::Subscriber { username, role } => {
+            tracing::info!(target: "access",
+                event = %event,
+                client_id = %client_id,
+                identity_type = "subscriber",
+                username = %username,
+                role = %role,
+                topic = %topic,
+                outcome = %outcome,
+                reason = reason.unwrap_or(""),
+            );
+        }
+    }
+}
 
 use auth_handler::{AuthHandler, IdentityStore};
+use delivery_handler::DeliveryHandler;
 use publish_handler::{PublishAclHandler, RetainStripHandler};
 use subscribe_handler::SubscribeAclHandler;
-use delivery_handler::DeliveryHandler;
 
 /// The main plugin struct that composes authentication, authorization,
 /// and filtering, and registers rmqtt hook handlers.

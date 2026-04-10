@@ -1,9 +1,12 @@
 use std::sync::Mutex;
 
-use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
+use file_rotate::{ContentLimit, FileRotate, compression::Compression, suffix::AppendCount};
 use tracing_subscriber::{
+    EnvFilter, Layer,
     filter::{self, LevelFilter},
-    fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer,
+    fmt,
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
 };
 
 use crate::config::AccessLogConfig;
@@ -36,9 +39,7 @@ pub fn init(access_log: Option<&AccessLogConfig>) {
             .with_target(false)
             .with_level(false)
             .with_writer(Mutex::new(file_rotate))
-            .with_filter(
-                filter::Targets::new().with_target("access", LevelFilter::INFO),
-            )
+            .with_filter(filter::Targets::new().with_target("access", LevelFilter::INFO))
     });
 
     tracing_subscriber::registry()

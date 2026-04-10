@@ -59,7 +59,9 @@ pub struct SubscriberAccount {
 #[derive(Debug, Error, Diagnostic)]
 pub enum ConfigError {
     #[error("Configuration file not found: {path}")]
-    #[diagnostic(help("Create a config file at this path, or use --config to specify a different location.\nSee config.toml.example for the expected format."))]
+    #[diagnostic(help(
+        "Create a config file at this path, or use --config to specify a different location.\nSee config.toml.example for the expected format."
+    ))]
     NotFound { path: String },
 
     #[error("Cannot read configuration file: {path}")]
@@ -94,10 +96,11 @@ impl BrokerConfig {
                 }
             }
         })?;
-        let config: BrokerConfig = toml::from_str(&contents).map_err(|e| ConfigError::ParseError {
-            path: path.to_string(),
-            source: e,
-        })?;
+        let config: BrokerConfig =
+            toml::from_str(&contents).map_err(|e| ConfigError::ParseError {
+                path: path.to_string(),
+                source: e,
+            })?;
         Ok(config)
     }
 }

@@ -47,13 +47,19 @@ impl Handler for AuthHandler {
                 let username = match connect_info.username() {
                     Some(u) => u.to_string(),
                     None => {
-                        return (false, Some(HookResult::AuthResult(AuthResult::BadUsernameOrPassword)));
+                        return (
+                            false,
+                            Some(HookResult::AuthResult(AuthResult::BadUsernameOrPassword)),
+                        );
                     }
                 };
                 let password = match connect_info.password() {
                     Some(p) => String::from_utf8_lossy(p).to_string(),
                     None => {
-                        return (false, Some(HookResult::AuthResult(AuthResult::BadUsernameOrPassword)));
+                        return (
+                            false,
+                            Some(HookResult::AuthResult(AuthResult::BadUsernameOrPassword)),
+                        );
                     }
                 };
 
@@ -69,11 +75,12 @@ impl Handler for AuthHandler {
                             public_key = %public_key,
                             outcome = "allow",
                         );
-                        self.identity_store.insert(
-                            client_id,
-                            ClientIdentity::Publisher { public_key },
-                        );
-                        (false, Some(HookResult::AuthResult(AuthResult::Allow(false, None))))
+                        self.identity_store
+                            .insert(client_id, ClientIdentity::Publisher { public_key });
+                        (
+                            false,
+                            Some(HookResult::AuthResult(AuthResult::Allow(false, None))),
+                        )
                     }
                     AuthOutcome::Subscriber { username, role } => {
                         tracing::info!(target: "access",
@@ -81,14 +88,15 @@ impl Handler for AuthHandler {
                             client_id = %client_id,
                             identity_type = "subscriber",
                             username = %username,
-                            role = ?role,
+                            role = %role,
                             outcome = "allow",
                         );
-                        self.identity_store.insert(
-                            client_id,
-                            ClientIdentity::Subscriber { username, role },
-                        );
-                        (false, Some(HookResult::AuthResult(AuthResult::Allow(false, None))))
+                        self.identity_store
+                            .insert(client_id, ClientIdentity::Subscriber { username, role });
+                        (
+                            false,
+                            Some(HookResult::AuthResult(AuthResult::Allow(false, None))),
+                        )
                     }
                     AuthOutcome::Denied { reason } => {
                         tracing::info!(target: "access",
@@ -99,7 +107,10 @@ impl Handler for AuthHandler {
                             reason = %reason,
                         );
                         tracing::warn!("Auth denied for {}: {}", client_id, reason);
-                        (false, Some(HookResult::AuthResult(AuthResult::BadUsernameOrPassword)))
+                        (
+                            false,
+                            Some(HookResult::AuthResult(AuthResult::BadUsernameOrPassword)),
+                        )
                     }
                 }
             }

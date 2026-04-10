@@ -29,9 +29,9 @@ pub fn authenticate_publisher(username: &str, password: &str) -> AuthOutcome {
     // Verify the JWT signature against the public key
     match super::jwt::decode_and_verify(password, pubkey_hex) {
         Ok(claims) => {
-            // Optionally verify claims.sub matches pubkey
-            if let Some(ref sub) = claims.sub {
-                if sub != pubkey_hex {
+            // Verify claims subject matches pubkey (supports both `sub` and `publicKey`)
+            if let Some(subject) = claims.subject() {
+                if !subject.eq_ignore_ascii_case(pubkey_hex) {
                     return AuthOutcome::Denied {
                         reason: "JWT subject does not match public key".into(),
                     };

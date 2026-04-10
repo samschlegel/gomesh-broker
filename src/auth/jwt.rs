@@ -6,10 +6,20 @@ use ed25519_dalek::{Signature, VerifyingKey, Verifier};
 pub struct JwtClaims {
     /// Subject — should match the publisher's public key.
     pub sub: Option<String>,
+    /// MeshCore uses `publicKey` instead of `sub`.
+    #[serde(alias = "publicKey")]
+    pub public_key: Option<String>,
     /// Expiration time (Unix timestamp).
     pub exp: Option<u64>,
     /// Issued-at time (Unix timestamp).
     pub iat: Option<u64>,
+}
+
+impl JwtClaims {
+    /// Returns the subject identity — prefers `sub`, falls back to `publicKey`.
+    pub fn subject(&self) -> Option<&str> {
+        self.sub.as_deref().or(self.public_key.as_deref())
+    }
 }
 
 /// Decode and verify an Ed25519-signed JWT.
@@ -54,13 +64,28 @@ pub fn decode_and_verify(token: &str, public_key_hex: &str) -> Result<JwtClaims>
     }
     let verifying_key = VerifyingKey::from_bytes(pk_bytes[..32].try_into().unwrap())?;
 
-    // Decode signature
-    let sig_bytes = base64::Engine::decode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        signature_b64,
-    )?;
+    // Decode signature — MeshCore tokens hex-encode the signature,
+    // standard JWTs use base64url. Try hex first (128 hex chars = 64 bytes),
+    // then fall back to base64url.
+    let sig_bytes = if signature_b64.len() == 128 {
+        hex::decode(signature_b64).ok()
+    } else {
+        None
+    }
+    .or_else(|| {
+        base64::Engine::decode(
+            &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+            signature_b64,
+        )
+        .ok()
+    })
+    .ok_or_else(|| anyhow!("signature is neither valid hex nor base64url"))?;
+
     if sig_bytes.len() != 64 {
-        return Err(anyhow!("Ed25519 signature must be 64 bytes"));
+        return Err(anyhow!(
+            "Ed25519 signature must be 64 bytes, got {}",
+            sig_bytes.len()
+        ));
     }
     let signature = Signature::from_bytes(sig_bytes[..64].try_into().unwrap());
 
@@ -167,5 +192,59 @@ mod tests {
         assert_eq!(decoded.sub.as_deref(), Some(pk_hex.as_str()));
         assert_eq!(decoded.exp, Some(1700000000));
         assert_eq!(decoded.iat, Some(1600000000));
+    }
+
+    /// Build a MeshCore-style JWT: hex-encoded signature, `publicKey` claim,
+    /// `"alg":"Ed25519"` header.
+    fn make_meshcore_jwt(signing_key: &SigningKey, claims_json: &str) -> String {
+        let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"Ed25519","typ":"JWT"}"#);
+        let payload = URL_SAFE_NO_PAD.encode(claims_json);
+        let message = format!("{}.{}", header, payload);
+        let signature = signing_key.sign(message.as_bytes());
+        let sig_hex = hex::encode(signature.to_bytes());
+        format!("{}.{}.{}", header, payload, sig_hex)
+    }
+
+    #[test]
+    fn meshcore_hex_signature_verifies() {
+        let (sk, pk_hex) = test_keypair();
+        let claims = serde_json::json!({
+            "publicKey": pk_hex,
+            "exp": 9999999999u64,
+            "iat": 1000000000u64
+        });
+        let token = make_meshcore_jwt(&sk, &claims.to_string());
+        let result = decode_and_verify(&token, &pk_hex);
+        assert!(result.is_ok(), "expected Ok for MeshCore JWT, got {:?}", result);
+    }
+
+    #[test]
+    fn meshcore_public_key_claim() {
+        let (sk, pk_hex) = test_keypair();
+        let claims = serde_json::json!({
+            "publicKey": pk_hex,
+            "exp": 9999999999u64,
+            "iat": 1000000000u64
+        });
+        let token = make_meshcore_jwt(&sk, &claims.to_string());
+        let decoded = decode_and_verify(&token, &pk_hex).expect("should decode");
+        assert_eq!(decoded.subject(), Some(pk_hex.as_str()));
+        assert!(decoded.sub.is_none());
+    }
+
+    #[test]
+    fn meshcore_wrong_key_rejects() {
+        let (sk, _) = test_keypair();
+        let other_key = SigningKey::from_bytes(&[2u8; 32]);
+        let other_pk_hex = hex::encode(other_key.verifying_key().as_bytes());
+
+        let claims = serde_json::json!({
+            "publicKey": other_pk_hex,
+            "exp": 9999999999u64,
+            "iat": 1000000000u64
+        });
+        let token = make_meshcore_jwt(&sk, &claims.to_string());
+        let result = decode_and_verify(&token, &other_pk_hex);
+        assert!(result.is_err(), "expected Err for wrong key, got {:?}", result);
     }
 }

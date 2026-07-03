@@ -1,33 +1,28 @@
+use super::topic;
 use super::AclDecision;
-use crate::types::{ClientIdentity, SubscriberRole, TopicAction, TopicParts};
+use crate::types::{ClientIdentity, SubscriberRole, TopicParts};
 
-/// Core ACL decision engine.
+/// ACL decision engine for the **publish** path.
+///
+/// The topic has already been parsed and its IATA code validated by
+/// `MeshcoreAuthorizer::check` before this is called.
 ///
 /// Rules:
-/// - **Admin subscribers** can subscribe and publish to any topic.
-///   (Also short-circuited in `MeshcoreAuthorizer::check` to bypass topic parsing.)
-/// - **Publishers** can only publish to topics matching their own public key.
-/// - **Subscribers with Full role** can subscribe to any valid topic.
-/// - **Subscribers with Limited role** can subscribe to any valid topic,
-///   but payload filtering is applied separately (see `filter` module).
-/// - No client may publish to another publisher's topic.
-pub fn check_acl(
-    identity: &ClientIdentity,
-    action: TopicAction,
-    topic: &TopicParts,
-) -> AclDecision {
-    match (identity, action) {
-        // Admin subscribers can subscribe and publish to any topic
-        (
-            ClientIdentity::Subscriber {
-                role: SubscriberRole::Admin,
-                ..
-            },
-            _,
-        ) => AclDecision::Allow,
+/// - **Admin subscribers** can publish to any topic. (Also short-circuited in
+///   `MeshcoreAuthorizer::check` to bypass topic parsing.)
+/// - **Publishers** can only publish to topics matching their own public key;
+///   no client may publish to another publisher's topic.
+/// - **Subscribers** (Full/Limited) may not publish.
+pub fn check_acl(identity: &ClientIdentity, topic: &TopicParts) -> AclDecision {
+    match identity {
+        // Admin subscribers can publish to any topic
+        ClientIdentity::Subscriber {
+            role: SubscriberRole::Admin,
+            ..
+        } => AclDecision::Allow,
 
         // Publishers can only publish to their own pubkey topics
-        (ClientIdentity::Publisher { public_key }, TopicAction::Publish) => {
+        ClientIdentity::Publisher { public_key } => {
             if topic.pubkey == *public_key {
                 AclDecision::AllowStripRetain
             } else {
@@ -40,32 +35,52 @@ pub fn check_acl(
             }
         }
 
-        // Publishers should not subscribe
-        (ClientIdentity::Publisher { .. }, TopicAction::Subscribe) => AclDecision::Deny {
-            reason: "Publishers are not allowed to subscribe".into(),
-        },
-
-        // Full subscribers can subscribe to anything
-        (
-            ClientIdentity::Subscriber {
-                role: SubscriberRole::Full,
-                ..
-            },
-            TopicAction::Subscribe,
-        ) => AclDecision::Allow,
-
-        // Limited subscribers can subscribe (filtering is applied at delivery time)
-        (
-            ClientIdentity::Subscriber {
-                role: SubscriberRole::Limited,
-                ..
-            },
-            TopicAction::Subscribe,
-        ) => AclDecision::Allow,
-
         // Subscribers cannot publish
-        (ClientIdentity::Subscriber { .. }, TopicAction::Publish) => AclDecision::Deny {
+        ClientIdentity::Subscriber { .. } => AclDecision::Deny {
             reason: "Subscribers are not allowed to publish".into(),
+        },
+    }
+}
+
+/// ACL decision engine for the **subscribe** path.
+///
+/// Subscription authorization is topic-parse-independent: broad wildcards like
+/// `meshcore/#` are permitted, so we work from the raw filter rather than a
+/// parsed [`TopicParts`].
+///
+/// Rules:
+/// - **Admin subscribers** can subscribe to anything (also short-circuited in
+///   `MeshcoreAuthorizer::check`).
+/// - **Full/Limited subscribers** can subscribe to any filter confined to the
+///   `meshcore/` root (see [`topic::filter_within_meshcore_root`]). This scopes
+///   them to MeshCore data and excludes `$SYS/*` and other applications' topics.
+///   Limited-role payload filtering is applied separately at delivery time.
+/// - **Publishers** may not subscribe.
+pub fn check_subscribe(identity: &ClientIdentity, filter: &str) -> AclDecision {
+    match identity {
+        // Admin subscribers can subscribe to anything
+        ClientIdentity::Subscriber {
+            role: SubscriberRole::Admin,
+            ..
+        } => AclDecision::Allow,
+
+        // Full/Limited subscribers are scoped to the meshcore/ namespace
+        ClientIdentity::Subscriber { .. } => {
+            if topic::filter_within_meshcore_root(filter) {
+                AclDecision::Allow
+            } else {
+                AclDecision::Deny {
+                    reason: format!(
+                        "Subscription filter must be within the '{}/' namespace",
+                        topic::MESHCORE_ROOT
+                    ),
+                }
+            }
+        }
+
+        // Publishers should not subscribe
+        ClientIdentity::Publisher { .. } => AclDecision::Deny {
+            reason: "Publishers are not allowed to subscribe".into(),
         },
     }
 }
@@ -89,7 +104,7 @@ mod tests {
             public_key: "aabb".into(),
         };
         assert_eq!(
-            check_acl(&id, TopicAction::Publish, &topic("aabb")),
+            check_acl(&id, &topic("aabb")),
             AclDecision::AllowStripRetain
         );
     }
@@ -99,20 +114,40 @@ mod tests {
         let id = ClientIdentity::Publisher {
             public_key: "aabb".into(),
         };
-        let result = check_acl(&id, TopicAction::Publish, &topic("ccdd"));
+        let result = check_acl(&id, &topic("ccdd"));
         assert!(matches!(result, AclDecision::Deny { .. }));
     }
 
     #[test]
-    fn full_subscriber_can_subscribe() {
+    fn full_subscriber_can_subscribe_within_meshcore() {
         let id = ClientIdentity::Subscriber {
-            username: "admin".into(),
+            username: "viewer".into(),
             role: SubscriberRole::Full,
         };
-        assert_eq!(
-            check_acl(&id, TopicAction::Subscribe, &topic("aabb")),
-            AclDecision::Allow
-        );
+        assert_eq!(check_subscribe(&id, "meshcore/#"), AclDecision::Allow);
+    }
+
+    #[test]
+    fn subscriber_denied_outside_meshcore() {
+        let id = ClientIdentity::Subscriber {
+            username: "viewer".into(),
+            role: SubscriberRole::Limited,
+        };
+        assert!(matches!(
+            check_subscribe(&id, "#"),
+            AclDecision::Deny { .. }
+        ));
+    }
+
+    #[test]
+    fn publisher_cannot_subscribe() {
+        let id = ClientIdentity::Publisher {
+            public_key: "aabb".into(),
+        };
+        assert!(matches!(
+            check_subscribe(&id, "meshcore/#"),
+            AclDecision::Deny { .. }
+        ));
     }
 
     #[test]
@@ -121,7 +156,7 @@ mod tests {
             username: "viewer".into(),
             role: SubscriberRole::Limited,
         };
-        let result = check_acl(&id, TopicAction::Publish, &topic("aabb"));
+        let result = check_acl(&id, &topic("aabb"));
         assert!(matches!(result, AclDecision::Deny { .. }));
     }
 
@@ -131,10 +166,7 @@ mod tests {
             username: "admin".into(),
             role: SubscriberRole::Admin,
         };
-        assert_eq!(
-            check_acl(&id, TopicAction::Subscribe, &topic("aabb")),
-            AclDecision::Allow
-        );
+        assert_eq!(check_subscribe(&id, "#"), AclDecision::Allow);
     }
 
     #[test]
@@ -143,9 +175,6 @@ mod tests {
             username: "admin".into(),
             role: SubscriberRole::Admin,
         };
-        assert_eq!(
-            check_acl(&id, TopicAction::Publish, &topic("aabb")),
-            AclDecision::Allow
-        );
+        assert_eq!(check_acl(&id, &topic("aabb")), AclDecision::Allow);
     }
 }

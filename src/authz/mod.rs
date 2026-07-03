@@ -40,7 +40,7 @@ impl Authorizer for MeshcoreAuthorizer {
         action: TopicAction,
         raw_topic: &str,
     ) -> AclDecision {
-        // Admins bypass topic parsing and IATA validation (e.g. wildcard subscriptions)
+        // Admins bypass all checks (e.g. wildcard, $SYS, and internal subscriptions)
         if matches!(
             identity,
             ClientIdentity::Subscriber {
@@ -51,25 +51,31 @@ impl Authorizer for MeshcoreAuthorizer {
             return AclDecision::Allow;
         }
 
-        // Parse topic into components
-        let parts = match topic::parse_topic(raw_topic) {
-            Some(p) => p,
-            None => {
-                return AclDecision::Deny {
-                    reason: "Malformed topic".into(),
+        match action {
+            // Subscription authorization is topic-parse-independent: non-admin
+            // subscribers may use broad wildcards confined to the meshcore/ root.
+            TopicAction::Subscribe => acl::check_subscribe(identity, raw_topic),
+
+            // Publishing requires a well-formed, IATA-valid topic owned by the publisher.
+            TopicAction::Publish => {
+                let parts = match topic::parse_topic(raw_topic) {
+                    Some(p) => p,
+                    None => {
+                        return AclDecision::Deny {
+                            reason: "Malformed topic".into(),
+                        };
+                    }
                 };
+
+                if !iata::is_valid_iata(&parts.iata) {
+                    return AclDecision::Deny {
+                        reason: format!("Invalid IATA code: {}", parts.iata),
+                    };
+                }
+
+                acl::check_acl(identity, &parts)
             }
-        };
-
-        // Validate IATA code
-        if !iata::is_valid_iata(&parts.iata) {
-            return AclDecision::Deny {
-                reason: format!("Invalid IATA code: {}", parts.iata),
-            };
         }
-
-        // Delegate to ACL engine
-        acl::check_acl(identity, action, &parts)
     }
 }
 
@@ -105,13 +111,47 @@ mod tests {
     }
 
     #[test]
-    fn non_admin_wildcard_denied() {
+    fn subscribers_can_subscribe_to_meshcore_wildcard() {
+        let authz = MeshcoreAuthorizer::new();
+        for role in [SubscriberRole::Full, SubscriberRole::Limited] {
+            let id = ClientIdentity::Subscriber {
+                username: "viewer".into(),
+                role,
+            };
+            assert_eq!(
+                authz.check(&id, TopicAction::Subscribe, "meshcore/#"),
+                AclDecision::Allow
+            );
+        }
+    }
+
+    #[test]
+    fn non_admin_denied_outside_meshcore() {
         let authz = MeshcoreAuthorizer::new();
         let id = ClientIdentity::Subscriber {
             username: "viewer".into(),
             role: SubscriberRole::Full,
         };
-        let result = authz.check(&id, TopicAction::Subscribe, "#");
-        assert!(matches!(result, AclDecision::Deny { .. }));
+        for filter in ["#", "$SYS/#", "other/#"] {
+            assert!(
+                matches!(
+                    authz.check(&id, TopicAction::Subscribe, filter),
+                    AclDecision::Deny { .. }
+                ),
+                "expected deny for filter {filter}"
+            );
+        }
+    }
+
+    #[test]
+    fn publisher_cannot_subscribe() {
+        let authz = MeshcoreAuthorizer::new();
+        let id = ClientIdentity::Publisher {
+            public_key: "aabb".into(),
+        };
+        assert!(matches!(
+            authz.check(&id, TopicAction::Subscribe, "meshcore/#"),
+            AclDecision::Deny { .. }
+        ));
     }
 }

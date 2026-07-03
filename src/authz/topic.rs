@@ -1,5 +1,27 @@
 use crate::types::TopicParts;
 
+/// The root namespace segment for all MeshCore data topics.
+///
+/// Real topics are `meshcore/{iata}/{pubkey}/{subtopic...}`. Internal topics
+/// (`$SYS/*`) and topics from other applications live under different roots, so
+/// confining a subscription filter to this root scopes a subscriber to MeshCore
+/// data only.
+pub const MESHCORE_ROOT: &str = "meshcore";
+
+/// Whether a subscription topic filter is confined to the [`MESHCORE_ROOT`] namespace.
+///
+/// Returns `true` only if the filter's first `/`-segment is the literal
+/// `meshcore` root. A leading wildcard (`#` or `+`) is rejected because it could
+/// match topics outside the namespace (e.g. other applications' roots). `$SYS`
+/// topics are excluded for the same reason.
+///
+/// Examples that return `true`: `meshcore/#`, `meshcore/SEA/#`,
+/// `meshcore/SEA/abcd/packets`, `meshcore`.
+/// Examples that return `false`: `#`, `+/SEA/#`, `$SYS/#`, `us/LAX/abcd`.
+pub fn filter_within_meshcore_root(filter: &str) -> bool {
+    filter.split('/').next() == Some(MESHCORE_ROOT)
+}
+
 /// Parse a raw MQTT topic string into its component parts.
 ///
 /// Expected format: `{region}/{iata}/{pubkey}/{subtopic...}`
@@ -47,5 +69,22 @@ mod tests {
         assert!(parse_topic("us/LAX").is_none());
         assert!(parse_topic("single").is_none());
         assert!(parse_topic("").is_none());
+    }
+
+    #[test]
+    fn meshcore_root_filters_allowed() {
+        assert!(filter_within_meshcore_root("meshcore/#"));
+        assert!(filter_within_meshcore_root("meshcore/SEA/#"));
+        assert!(filter_within_meshcore_root("meshcore/SEA/abcd/packets"));
+        assert!(filter_within_meshcore_root("meshcore"));
+    }
+
+    #[test]
+    fn non_meshcore_root_filters_rejected() {
+        assert!(!filter_within_meshcore_root("#"));
+        assert!(!filter_within_meshcore_root("+/SEA/#"));
+        assert!(!filter_within_meshcore_root("$SYS/#"));
+        assert!(!filter_within_meshcore_root("us/LAX/abcd"));
+        assert!(!filter_within_meshcore_root(""));
     }
 }

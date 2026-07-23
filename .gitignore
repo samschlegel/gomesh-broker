@@ -1,5 +1,7 @@
 /target
 .claude/
 config.toml
+cert.pem
+key.pem
 .env
 .envrc

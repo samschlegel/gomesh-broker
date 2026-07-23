@@ -82,6 +82,11 @@ async fn run(config_path: &str) -> miette::Result<()> {
         rmqtt::net::Builder::new()
             .name("wss")
             .laddr(listen_addr)
+            // Enable SO_REUSEADDR so the broker can rebind :443 immediately on
+            // restart while the previous process's sockets are still draining;
+            // rmqtt-net leaves this off by default, causing "Address already in
+            // use" flaps on redeploy/rollback.
+            .reuseaddr(Some(true))
             .tls_cert(Some(&tls_cert))
             .tls_key(Some(&tls_key))
             .bind(),

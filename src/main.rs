@@ -66,6 +66,11 @@ async fn run(config_path: &str) -> miette::Result<()> {
 
     let scx = rmqtt::context::ServerContext::new().build().await;
 
+    // Register $SYS topic plugin for broker monitoring
+    rmqtt_sys_topic::register(&scx, true, false)
+        .await
+        .map_err(|e| miette::miette!("Failed to register sys-topic plugin: {e}"))?;
+
     let register = scx.extends.hook_mgr.register();
     plugin.register(register.as_ref()).await;
     register.start().await;

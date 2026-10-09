@@ -74,7 +74,7 @@ impl MeshcorePlugin {
     /// Register all hook handlers with the rmqtt broker.
     ///
     /// Registers handlers for:
-    /// - Client authentication (`ClientAuthenticate`)
+    /// - Client authentication, including the Last Will topic check (`ClientAuthenticate`)
     /// - Publish ACL (`MessagePublishCheckAcl`)
     /// - Retain stripping (`MessagePublish`)
     /// - Subscribe ACL (`ClientSubscribeCheckAcl`)
@@ -85,6 +85,7 @@ impl MeshcorePlugin {
                 Type::ClientAuthenticate,
                 Box::new(AuthHandler::new(
                     self.authenticator.clone(),
+                    self.authorizer.clone(),
                     self.identity_store.clone(),
                 )),
             )

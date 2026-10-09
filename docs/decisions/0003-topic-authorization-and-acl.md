@@ -60,6 +60,14 @@ Topic parsing, IATA validation, and ACL decisions are separate functions compose
 | Subscriber (Full) | Subscribe | Allow |
 | Subscriber (Limited) | Subscribe | Allow (payload filtered at delivery) |
 | Subscriber (any) | Publish | Deny |
+| Any | Last Will (set at CONNECT) | Checked at CONNECT with the Publish rules above; CONNECT refused if the Will topic would be denied |
+
+### Last Will
+
+rmqtt publishes a client's Last Will itself when the connection drops without a DISCONNECT, and
+that path does not run the `MessagePublishCheckAcl` hook. So the Will topic is checked once, at
+CONNECT time, with the same rules as a PUBLISH by that client. A client that could not publish
+to a topic by hand cannot have the broker publish there on its behalf either.
 
 ## Consequences
 

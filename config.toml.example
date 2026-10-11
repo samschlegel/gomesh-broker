@@ -3,10 +3,15 @@
 # MQTT-over-WSS listener address
 listen = "0.0.0.0:8083"
 
-# TLS certificate and private key (PEM format)
+# TLS certificate and private key (PEM format). Set both to serve WSS; omit
+# both to serve plain WS, e.g. behind a TLS-terminating proxy like HAProxy.
 # Generate a self-signed pair with: cargo run -- generate-cert
 tls_cert = "cert.pem"
 tls_key = "key.pem"
+
+# Read the client address from a PROXY protocol header on each connection.
+# Only enable when the listener is reachable solely through a trusted proxy.
+# proxy_protocol = false
 
 # Allowed IATA region codes (empty = allow all)
 # allowed_regions = ["SFO", "LAX", "JFK"]

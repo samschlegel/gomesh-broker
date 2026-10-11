@@ -1,0 +1,30 @@
+[Unit]
+Description=gomesh MeshCore MQTT broker (staging)
+Documentation=https://github.com/samschlegel/gomesh-broker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gomesh
+Group=users
+WorkingDirectory=/opt/gomesh-stg
+ExecStart=/opt/gomesh-stg/bin/gomesh-broker -c /opt/gomesh-stg/etc/gomesh-broker/config.toml
+Restart=on-failure
+RestartSec=2
+
+# Listens on a loopback port behind HAProxy, so needs no capabilities.
+CapabilityBoundingSet=
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/opt/gomesh-stg
+
+[Install]
+WantedBy=multi-user.target

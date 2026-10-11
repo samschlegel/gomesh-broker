@@ -59,8 +59,12 @@ async fn run(config_path: &str) -> miette::Result<()> {
         .parse()
         .map_err(|e| miette::miette!("Invalid listen address '{}': {e}", config.listen))?;
 
-    let tls_cert = config.tls_cert.clone();
-    let tls_key = config.tls_key.clone();
+    let tls = match (config.tls_cert.clone(), config.tls_key.clone()) {
+        (Some(cert), Some(key)) => Some((cert, key)),
+        (None, None) => None,
+        _ => miette::bail!("tls_cert and tls_key must be set together"),
+    };
+    let proxy_protocol = config.proxy_protocol;
 
     let plugin = gomesh_broker::hooks::MeshcorePlugin::new(config);
 
@@ -76,32 +80,41 @@ async fn run(config_path: &str) -> miette::Result<()> {
     register.start().await;
     tracing::info!("Registered MeshCore hook handlers");
 
-    tracing::info!("Starting MQTT-over-WSS broker on {}", listen_addr);
+    let scheme = if tls.is_some() { "wss" } else { "ws" };
+    tracing::info!(
+        "Starting MQTT-over-{} broker on {} (proxy_protocol: {})",
+        scheme.to_uppercase(),
+        listen_addr,
+        proxy_protocol
+    );
 
-    let listener = from_anyhow(
-        rmqtt::net::Builder::new()
-            .name("wss")
-            .laddr(listen_addr)
-            // Enable SO_REUSEADDR so the broker can rebind :443 immediately on
-            // restart while the previous process's sockets are still draining;
-            // rmqtt-net leaves this off by default, causing "Address already in
-            // use" flaps on redeploy/rollback.
-            .reuseaddr(Some(true))
-            // rmqtt-net allows anonymous clients by default, which skips the
-            // ClientAuthenticate hook for CONNECTs without a username and
-            // lets them connect with no identity.
-            .allow_anonymous(false)
-            .tls_cert(Some(&tls_cert))
-            .tls_key(Some(&tls_key))
-            .bind(),
-    )
-    .wrap_err("Failed to bind MQTT listener")?;
+    let mut builder = rmqtt::net::Builder::new()
+        .name(scheme)
+        .laddr(listen_addr)
+        // Enable SO_REUSEADDR so the broker can rebind its port immediately on
+        // restart while the previous process's sockets are still draining;
+        // rmqtt-net leaves this off by default, causing "Address already in
+        // use" flaps on redeploy/rollback.
+        .reuseaddr(Some(true))
+        // rmqtt-net allows anonymous clients by default, which skips the
+        // ClientAuthenticate hook for CONNECTs without a username and
+        // lets them connect with no identity.
+        .allow_anonymous(false)
+        .proxy_protocol(proxy_protocol);
+    if let Some((cert, key)) = &tls {
+        builder = builder.tls_cert(Some(cert)).tls_key(Some(key));
+    }
+    let listener = from_anyhow(builder.bind()).wrap_err("Failed to bind MQTT listener")?;
 
-    let wss = from_anyhow(listener.wss()).wrap_err("Failed to create WSS listener")?;
+    let listener = if tls.is_some() {
+        from_anyhow(listener.wss()).wrap_err("Failed to create WSS listener")?
+    } else {
+        from_anyhow(listener.ws()).wrap_err("Failed to create WS listener")?
+    };
 
     from_anyhow(
         rmqtt::server::MqttServer::new(scx)
-            .listener(wss)
+            .listener(listener)
             .build()
             .run()
             .await,

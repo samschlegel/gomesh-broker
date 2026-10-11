@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
-# Runs on the deploy host as root (via `sudo bash -s -- [VERSION]`).
+# Runs on the deploy host as root (via `sudo bash -s -- ENV [VERSION]`, ENV = prod|stg).
 # Activates a previously-deployed release and restarts the service.
 #
 #   no arg   -> roll back to the most recent release that is NOT current
 #   VERSION  -> roll back to that specific release (a releases/ subdir name)
 set -euo pipefail
 
-BASE=/opt/gomesh
+ENV_NAME="${1:-prod}"
+case "$ENV_NAME" in
+  prod) BASE=/opt/gomesh;     SERVICE=gomesh-broker ;;
+  stg)  BASE=/opt/gomesh-stg; SERVICE=gomesh-broker-stg ;;
+  *) echo "error: unknown environment '$ENV_NAME' (expected prod or stg)" >&2; exit 1 ;;
+esac
 REL=$BASE/releases
 OWNER=gomesh
 GROUP=users
-TARGET="${1:-}"
+TARGET="${2:-}"
 
 mapfile -t VERSIONS < <(
   find "$REL" -mindepth 1 -maxdepth 1 -type d -name '20*' -printf '%f\n' | sort
@@ -43,8 +48,8 @@ mv -f "$BASE/etc/gomesh-broker/config.toml.next" "$BASE/etc/gomesh-broker/config
 ln -sfn "$TARGET" "$REL/current"
 chown -h "$OWNER":"$GROUP" "$REL/current"
 
-systemctl restart gomesh-broker
+systemctl restart "$SERVICE"
 sleep 1
-systemctl is-active --quiet gomesh-broker \
-  && echo "Rolled back to $TARGET and restarted gomesh-broker (active)." \
-  || { echo "error: gomesh-broker failed to start after rollback" >&2; systemctl --no-pager -l status gomesh-broker >&2; exit 1; }
+systemctl is-active --quiet "$SERVICE" \
+  && echo "Rolled back to $TARGET and restarted $SERVICE (active)." \
+  || { echo "error: $SERVICE failed to start after rollback" >&2; systemctl --no-pager -l status "$SERVICE" >&2; exit 1; }

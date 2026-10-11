@@ -1,6 +1,7 @@
 /target
 .claude/
 config.toml
+config.stg.toml
 cert.pem
 key.pem
 .env

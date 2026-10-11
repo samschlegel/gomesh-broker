@@ -8,10 +8,16 @@ use thiserror::Error;
 pub struct BrokerConfig {
     /// MQTT listener address (e.g. "0.0.0.0:8083").
     pub listen: String,
-    /// Path to TLS certificate file (PEM).
-    pub tls_cert: String,
+    /// Path to TLS certificate file (PEM). With `tls_key`, serves WSS;
+    /// without both, serves plain WS (e.g. behind a TLS-terminating proxy).
+    pub tls_cert: Option<String>,
     /// Path to TLS private key file (PEM).
-    pub tls_key: String,
+    pub tls_key: Option<String>,
+    /// Expect a PROXY protocol header on each connection and take the client
+    /// address from it. Only enable when the listener is reachable solely
+    /// through a trusted proxy, since the header is otherwise spoofable.
+    #[serde(default)]
+    pub proxy_protocol: bool,
     /// Static subscriber accounts keyed by username.
     pub subscribers: HashMap<String, SubscriberAccount>,
     /// Allowed IATA region codes. If empty, all codes are accepted.

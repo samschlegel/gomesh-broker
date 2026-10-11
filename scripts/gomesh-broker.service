@@ -1,0 +1,33 @@
+[Unit]
+Description=gomesh MeshCore MQTT broker
+Documentation=https://github.com/samschlegel/gomesh-broker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gomesh
+Group=users
+WorkingDirectory=/opt/gomesh
+ExecStart=/opt/gomesh/bin/gomesh-broker -c /opt/gomesh/etc/gomesh-broker/config.toml
+Restart=on-failure
+RestartSec=2
+
+# Bind :443 as a non-root user without needing setcap on the binary.
+# (A file capability would be stripped every time the binary is redeployed;
+# an ambient capability is applied by systemd on each start, so it survives.)
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/opt/gomesh
+
+[Install]
+WantedBy=multi-user.target

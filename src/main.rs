@@ -87,6 +87,10 @@ async fn run(config_path: &str) -> miette::Result<()> {
             // rmqtt-net leaves this off by default, causing "Address already in
             // use" flaps on redeploy/rollback.
             .reuseaddr(Some(true))
+            // rmqtt-net allows anonymous clients by default, which skips the
+            // ClientAuthenticate hook for CONNECTs without a username and
+            // lets them connect with no identity.
+            .allow_anonymous(false)
             .tls_cert(Some(&tls_cert))
             .tls_key(Some(&tls_key))
             .bind(),
